@@ -1,5 +1,3 @@
-project(blk_library VERSION 1.0)
-
 set(blk_srcs
     block_device.cpp
     io_queue.cpp
@@ -20,7 +18,7 @@ message ("zhuhai:${PROJECT_SOURCE_DIR} ${CMAKE_BINARY_DIR}")
 #   当然，外层CMakeLists.txt再重复添加也不会出错。
 target_include_directories(blk
     PRIVATE "${CMAKE_BINARY_DIR}"
-    PRIVATE "${PROJECT_SOURCE_DIR}/.."
+    PRIVATE "${PROJECT_SOURCE_DIR}/src"
     PRIVATE "/home/yuanguo.hyg/local/spdk-20.07/include"
     PUBLIC  "/home/yuanguo.hyg/local/boost-1.82.0/include"
 )

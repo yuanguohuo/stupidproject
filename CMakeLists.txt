@@ -66,8 +66,8 @@ add_compile_definitions(HAVE_SPDK=1)
 add_subdirectory(src)
 
 target_include_directories(stupid
-    PUBLIC "${PROJECT_SOURCE_DIR}/src"
     PUBLIC "${CMAKE_BINARY_DIR}"
+    PUBLIC "${PROJECT_SOURCE_DIR}/src"
     PUBLIC "/opt/homebrew/include"
     PUBLIC "/home/yuanguo.hyg/local/boost-1.82.0/include"
 )
