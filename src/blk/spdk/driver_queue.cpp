@@ -48,6 +48,19 @@ void io_complete(void *t, const struct spdk_nvme_cpl *completion)
       }
       delete task;
     } else {
+      //Yuanguo: task->return_code不为0，失败了？
+      //  为何这样处理？
+      //
+      //      primary (ref=3)
+      //         ^
+      //         |
+      //   +-----+------+------------+
+      //   ^            ^            ^ primary指针
+      //   |            |            |
+      //   t0 --next--> t1 --next--> t2 --next--> nullptr
+      //
+      //   - 若有primary(多个128K的读task)：直接删除当前task，若是最后一个，把primary->return_code设置为0(设置成功？)
+      //   - 若无primary(单个128K的读task): 直接设置成功？
       if (Task* primary = task->primary; primary != nullptr) {
         delete task;
         if (!primary->ref) {

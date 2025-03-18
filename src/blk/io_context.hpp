@@ -35,6 +35,10 @@ public:
 
   std::atomic_int num_pending = {0};
   std::atomic_int num_running = {0};
+  //Yuanguo: 是否允许expected io error?
+  //  - 若允许，遇到-EOPNOTSUPP, -ETIMEDOUT, -ENOSPC, -ENOLINK, -EREMOTEIO, -EAGAIN, -EIO, -ENODATA, -EILSEQ, -ENOMEM, -EREMCHG, -EBADE错误时，
+  //    统一返回-EIO (Input/output error)；那些是expected io error?
+  //  - 若不允许，则返回真实错误码；
   bool allow_eio;
   uint32_t flags = 0;
 

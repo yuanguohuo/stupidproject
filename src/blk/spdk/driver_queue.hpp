@@ -61,6 +61,9 @@ public:
       }
       data_buf_list.push_front(*reinterpret_cast<data_cache_buf *>(b));
     }
+
+    ++driver->queues_allocated;
+    std::cout << "allocated queue " << qpair << " queues_allocated: " << driver->queues_allocated.load() << std::endl;
   }
 
   ~SharedDriverQueueData() {
@@ -69,6 +72,7 @@ public:
     }
 
     data_buf_list.clear_and_dispose(spdk_dma_free);
+    --driver->queues_allocated;
   }
 };
 

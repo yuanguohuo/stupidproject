@@ -69,6 +69,11 @@ int main(int argc, char** argv)
   stupid::debug::lockdep_guard _lockdep_guard;
   pthread_setname_wrapper(pthread_self(), "stupid_main");
 
+  int num_threads = 4;
+  if (argc == 2) {
+    num_threads = std::atoi(argv[1]);
+  }
+
   stupid::common::initialize(stupid::global::CODE_ENVIRONMENT_DAEMON);
 
   stupid::common::start_async_signal_handler();
@@ -84,8 +89,7 @@ int main(int argc, char** argv)
       return -1;
   }
 
-#define num_threads 4
-
+  std::cout << "start " << num_threads << " threads" << std::endl;
   std::vector<LoadThread> threads(num_threads);
 
   for (int i=0; i<num_threads; ++i) {

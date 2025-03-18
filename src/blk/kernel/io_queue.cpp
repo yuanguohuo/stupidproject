@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "blk/io_queue.hpp"
+#include "blk/kernel/io_queue.hpp"
 
 int aio_queue_t::submit_batch(aio_iter begin, aio_iter end, uint16_t aios_size, void *priv, int *retries)
 {

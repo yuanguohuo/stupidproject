@@ -14,9 +14,9 @@
 static NVMEManager manager;
 
 NVMEDevice::NVMEDevice(aio_callback_t cb, void *cbpriv) : BlockDevice(cb, cbpriv), driver(nullptr)
-{
-}
+{}
 
+// path: a string like '/var/lib/ceph/osd/ceph-0/spdk:trtype:pcie traddr:0000:65:00.0'
 bool NVMEDevice::support(const std::string& path)
 {
   char buf[PATH_MAX + 1];
@@ -83,12 +83,11 @@ void NVMEDevice::close()
   std::cout << __func__ << " end" << std::endl;
 }
 
-/*
-int NVMEDevice::collect_metadata(const string& prefix, map<string,string> *pm) const
+int NVMEDevice::collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const
 {
   (*pm)[prefix + "rotational"] = "0";
-  (*pm)[prefix + "size"] = stringify(get_size());
-  (*pm)[prefix + "block_size"] = stringify(get_block_size());
+  (*pm)[prefix + "size"] = std::to_string(get_size());
+  (*pm)[prefix + "block_size"] = std::to_string(get_block_size());
   (*pm)[prefix + "driver"] = "NVMEDevice";
   (*pm)[prefix + "type"] = "nvme";
   (*pm)[prefix + "access_mode"] = "spdk";
@@ -96,7 +95,6 @@ int NVMEDevice::collect_metadata(const string& prefix, map<string,string> *pm) c
 
   return 0;
 }
-*/
 
 void NVMEDevice::aio_submit(IOContext *ioc)
 {
@@ -107,13 +105,34 @@ void NVMEDevice::aio_submit(IOContext *ioc)
   if (pending && t) {
     ioc->num_running += pending;
     ioc->num_pending -= pending;
+
+    //Yuanguo: 看上本函数假设单线程操作ioc. 内部调用确实满足，见:
+    //     - NVMEDevice::read()
+    //     - NVMEDevice::read_random()
+    //     - NVMEDevice::write()
+    //
+    // 但是，多个线程可以引用相同的NVMEDevice实例，它们要是共享一个IOContext呢？
     assert(ioc->num_pending.load() == 0);  // we should be only thread doing this
 
     // Only need to push the first entry
     ioc->nvme_task_first = ioc->nvme_task_last = nullptr;
 
+    //Yuanguo:
+    // thread_local变量：
+    //      - 线程首次访问时初始化（类似static变量的延迟初始化）
+    //      - 线程退出时析构(按声明顺序的逆序析构)
+    // 和函数内部的static变量有点像：
+    //
+    //     存储说明符       |   作用域    |  声明周期      |  线程共享性
+    //  --------------------+-------------+----------------+-------------------
+    //     函数内static变量 |   块作用域  |  程序生命周期  |  所有线程共享
+    //     thread_local变量 |   块作用域  |  线程生命周期  |  每个线程独立
+
     thread_local SharedDriverQueueData queue_t = SharedDriverQueueData(this, driver);
 
+    //Yuanguo:
+    //  _aio_handle()里循环poll (spdk_nvme_qpair_process_completions)，直到ioc->num_running==0成立
+    //  所以，这里就等价于阻塞！
     queue_t._aio_handle(t, ioc);
   }
 }
@@ -150,9 +169,12 @@ static void write_split(
   while (remain_len > 0) {
     write_size = std::min(remain_len, split_size);
     t = new Task(dev, IOCommand::WRITE_COMMAND, off + begin, write_size);
+
     // TODO: if upper layer alloc memory with known physical address,
     // we can reduce this copy
     //bl.splice(0, write_size, &t->bl);
+
+    //Yuanguo: we are using upper layer allocated memory !!!
     t->buf = buf + begin;
 
     remain_len -= write_size;
@@ -175,6 +197,10 @@ static void make_read_tasks(
   // This value may need to be got from configuration later.
   uint64_t split_size = 131072; // 128KB.
 
+  //Yuanguo:
+  //  对于read()和aio_read()，off和len已经是block_size对齐的(orig_off==aligned_off && orig_len==aligned_len)；
+  //  对于read_random(), 是这样的：
+  //
   //       +----------------------------+----------------------------+----------------------------+
   //       |///// useless ////|         |                            |        |//// useless //////|
   //       +----------------------------+----------------------------+----------------------------+
@@ -190,12 +216,23 @@ static void make_read_tasks(
 
   for (; begin < aligned_end; begin += split_size) {
     auto read_size = std::min(aligned_end - begin, split_size);
+    //Yuanguo:
+    //  第一次多读了tmp_off字节(useless)；所以有效长度是tmp_len (当然，要考虑remain_orig_len，取最小)；
+    //  第二次及以后：第一次结束时把tmp_off设置为0，所以有效长度就是read_size (当然，要考虑remain_orig_len，取最小)；
     auto tmp_len = std::min(remain_orig_len, read_size - tmp_off);
     Task *t = nullptr;
 
     if (primary && (aligned_len <= split_size)) {
       t = primary;
     } else {
+      //Yuanguo:
+      //      primary (ref=3)
+      //         ^
+      //         |
+      //   +-----+------+------------+
+      //   ^            ^            ^ primary指针
+      //   |            |            |
+      //   t0 --next--> t1 --next--> t2 --next--> nullptr
       t = new Task(dev, IOCommand::READ_COMMAND, begin, read_size, 0, primary);
     }
 
@@ -203,6 +240,8 @@ static void make_read_tasks(
 
     // TODO: if upper layer alloc memory with known physical address,
     // we can reduce this copy
+    // Yuanguo: 拷贝到buf的时候，跳过t的前tmp_off字节；即buf[0:tmp_len] <- t[tmp_off:tmp_off+tmp_len]
+    //   当然，这只是对于第1个t，之后tmp_off就被置0了；
     t->fill_cb = [buf, t, tmp_off, tmp_len]  {
       t->copy_to_buf(buf, tmp_off, tmp_len);
     };
@@ -223,16 +262,12 @@ int NVMEDevice::read(
   bool buffered)
 {
   std::cout << __func__ << " " << off << "~" << len << " ioc " << ioc << std::endl;
+  //Yuanguo: off和len必须是block_size对齐的;
   assert(is_valid_io(off, len));
 
   Task t(this, IOCommand::READ_COMMAND, off, len, 1);
 
-  //Yuanguo:
-  //  看上去，user传来的off必须是block_size对齐的；
-  //  buf需要page对齐吗? 从make_read_tasks看不需要，因为t->copy_to_buf(buf, ...)不需要buf是page对齐的；
-  assert(off % block_size == 0);
-
-  // Yuanguo: 直接使用user的buf；
+  // Yuanguo: 直接使用user的buf；buf需要page对齐吗? 从make_read_tasks看不需要，因为t->copy_to_buf(buf, ...)不需要buf是page对齐的；
   // bufferptr p = buffer::create_small_page_aligned(len);
   // char *buf = p.c_str();
 
@@ -273,7 +308,6 @@ int NVMEDevice::read_random(
   return t.return_code;
 }
 
-
 int NVMEDevice::aio_read(
   uint64_t off,
   uint64_t len,
@@ -282,14 +316,10 @@ int NVMEDevice::aio_read(
   IOContext *ioc)
 {
   std::cout << __func__ << " " << off << "~" << len << " ioc " << ioc << std::endl;
+  //Yuanguo: off和len必须是block_size对齐的;
   assert(is_valid_io(off, len));
 
-  //Yuanguo:
-  //  看上去，user传来的off必须是block_size对齐的；
-  //  buf需要page对齐吗? 从make_read_tasks看不需要，因为t->copy_to_buf(buf, ...)不需要buf是page对齐的；
-  assert(off % block_size == 0);
-
-  // Yuanguo: 直接使用user的buf；
+  // Yuanguo: 直接使用user的buf；buf需要page对齐吗? 从make_read_tasks看不需要，因为t->copy_to_buf(buf, ...)不需要buf是page对齐的；
   // bufferptr p = buffer::create_small_page_aligned(len);
   // pbl->append(p);
   // char* buf = p.c_str();
@@ -303,19 +333,16 @@ int NVMEDevice::aio_read(
 
 int NVMEDevice::write(
   uint64_t off,
-  //bufferlist &bl,
   uint64_t len,
+  //bufferlist &bl,
   char* buf,
   bool buffered,
   int write_hint)
 {
   std::cout << __func__ << " " << off << "~" << len << " buffered " << buffered << std::endl;
 
-  assert(off % block_size == 0);
-  assert(len % block_size == 0);
-  assert(len > 0);
-  assert(off < size);
-  assert(off + len <= size);
+  //Yuanguo: off和len必须是block_size对齐的;
+  assert(is_valid_io(off, len));
 
   IOContext ioc(NULL);
   write_split(this, off, len, buf, &ioc);
@@ -323,20 +350,26 @@ int NVMEDevice::write(
   std::cout << __func__ << " " << off << "~" << len << std::endl;
 
   aio_submit(&ioc);
-  ioc.aio_wait();
+
+  //TODO:
+  //Yuanguo: aio_submit (SharedDriverQueueData::_aio_handle()) is actually blocking,
+  //  do we need ioc.aio_wait?
+  //ioc.aio_wait();
+
   return 0;
 }
 
 int NVMEDevice::aio_write(
   uint64_t off,
-  //bufferlist &bl,
   uint64_t len,
+  //bufferlist &bl,
   char* buf,
   IOContext *ioc,
   bool buffered,
   int write_hint)
 {
   std::cout << __func__ << " " << off << "~" << len << " ioc " << ioc << " buffered " << buffered << std::endl;
+  //Yuanguo: off和len必须是block_size对齐的;
   assert(is_valid_io(off, len));
 
   write_split(this, off, len, buf, ioc);

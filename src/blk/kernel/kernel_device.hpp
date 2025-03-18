@@ -30,8 +30,7 @@ public:
   //bool try_discard(interval_set<uint64_t> &to_release, bool async = true) override;
   //void discard_drain() override;
 
-  //TODO:
-  //int collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const override { return 0; }
+  int collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const override { return 0; }
 
   int read(
     uint64_t off,

@@ -1,10 +1,10 @@
 set(blk_srcs
     block_device.cpp
-    io_queue.cpp
     io_context.cpp
     spdk/driver_queue.cpp
     spdk/nvme_device.cpp
     spdk/nvme_manager.cpp
+    kernel/io_queue.cpp
 )
 
 add_library(blk STATIC ${blk_srcs})

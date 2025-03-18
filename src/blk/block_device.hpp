@@ -56,7 +56,7 @@ private:
   };
 
   static block_device_t detect_device_type(const std::string& path);
-  static block_device_t device_type_from_name(const std::string& blk_dev_name);
+  static block_device_t device_type_from_name(const std::string& blk_dev_type_name);
   static BlockDevice* create_with_type(block_device_t device_type, const std::string& path, aio_callback_t cb, void *cbpriv, aio_callback_t d_cb, void *d_cbpriv);
 
 protected:
@@ -86,11 +86,11 @@ public:
 
   virtual ~BlockDevice() = default;
 
-  static BlockDevice* create(const std::string& blk_dev_name, const std::string& path, aio_callback_t cb, void *cbpriv, aio_callback_t d_cb, void *d_cbpriv);
+  static BlockDevice* create(const std::string& blk_dev_type_name, const std::string& path, aio_callback_t cb, void *cbpriv, aio_callback_t d_cb, void *d_cbpriv);
   virtual bool supported_bdev_label() { return true; }
   virtual bool is_rotational() { return rotational; }
 
-  // HM-SMR-specific calls
+  // >>>>>>>> HM-SMR-specific calls
   virtual bool is_smr() const { return false; }
   virtual uint64_t get_zone_size() const {
     assert(is_smr());
@@ -110,6 +110,7 @@ public:
     assert(is_smr());
     return std::vector<uint64_t>();
   }
+  // <<<<<<<< HM-SMR-specific calls
 
   virtual void aio_submit(IOContext *ioc) = 0;
 
@@ -143,7 +144,7 @@ public:
     return -EOPNOTSUPP;
   }
 
-  virtual int collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const { return 0; }
+  virtual int collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const = 0;
 
   virtual int read(
     uint64_t off,
@@ -194,7 +195,8 @@ public:
   virtual int open(const std::string& path) = 0;
   virtual void close() = 0;
 
-  struct hugepaged_raw_marker_t {};
+  //TODO:
+  //struct hugepaged_raw_marker_t {};
 
 protected:
   bool is_valid_io(uint64_t off, uint64_t len) const;

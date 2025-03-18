@@ -57,8 +57,7 @@ class NVMEDevice : public BlockDevice {
 
   void aio_submit(IOContext *ioc) override;
 
-  //TODO:
-  //int collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const override;
+  int collect_metadata(const std::string& prefix, std::map<std::string,std::string> *pm) const override;
 
   int read(
     uint64_t off,

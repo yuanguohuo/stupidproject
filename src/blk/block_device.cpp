@@ -11,7 +11,7 @@
 #include "blk/spdk/nvme_device.hpp"
 #endif
 
-
+// path: a string like '/var/lib/ceph/osd/ceph-0/spdk:trtype:pcie traddr:0000:65:00.0'
 BlockDevice::block_device_t BlockDevice::detect_device_type(const std::string& path)
 {
 #if defined(HAVE_SPDK)
@@ -26,15 +26,15 @@ BlockDevice::block_device_t BlockDevice::detect_device_type(const std::string& p
 #endif
 }
 
-BlockDevice::block_device_t BlockDevice::device_type_from_name(const std::string& blk_dev_name)
+BlockDevice::block_device_t BlockDevice::device_type_from_name(const std::string& blk_dev_type_name)
 {
 #if defined(HAVE_LIBAIO) || defined(HAVE_POSIXAIO)
-  if (blk_dev_name == "aio") {
+  if (blk_dev_type_name == "aio") {
     return block_device_t::aio;
   }
 #endif
 #if defined(HAVE_SPDK)
-  if (blk_dev_name == "spdk") {
+  if (blk_dev_type_name == "spdk") {
     return block_device_t::spdk;
   }
 #endif
@@ -58,13 +58,13 @@ BlockDevice* BlockDevice::create_with_type(block_device_t device_type, const std
   }
 }
 
-BlockDevice *BlockDevice::create(const std::string& blk_dev_name, const std::string& path, aio_callback_t cb, void *cbpriv, aio_callback_t d_cb, void *d_cbpriv)
+BlockDevice *BlockDevice::create(const std::string& blk_dev_type_name, const std::string& path, aio_callback_t cb, void *cbpriv, aio_callback_t d_cb, void *d_cbpriv)
 {
   block_device_t device_type = block_device_t::unknown;
-  if (blk_dev_name.empty()) {
+  if (blk_dev_type_name.empty()) {
     device_type = detect_device_type(path);
   } else {
-    device_type = device_type_from_name(blk_dev_name);
+    device_type = device_type_from_name(blk_dev_type_name);
   }
   return create_with_type(device_type, path, cb, cbpriv, d_cb, d_cbpriv);
 }

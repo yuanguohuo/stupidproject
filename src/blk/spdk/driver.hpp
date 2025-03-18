@@ -2,6 +2,7 @@
 #define STUPID__BLK_SPDK_DRIVER_HPP
 
 #include <vector>
+#include <atomic>
 
 #include <spdk/nvme.h>
 
@@ -17,6 +18,7 @@ class SharedDriverData {
 
   public:
   std::vector<NVMEDevice*> registered_devices;
+  std::atomic_int queues_allocated = {0};
 
   friend class SharedDriverQueueData;
 
