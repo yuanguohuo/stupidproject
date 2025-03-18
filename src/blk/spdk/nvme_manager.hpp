@@ -64,6 +64,8 @@ public:
     std::cout << __func__ << " successfully attach nvme device at" << trid.traddr << std::endl;
 
     // only support one device per osd now!
+    // Yuanguo: 为什么只支持一个device呢？
+    // 看NVMEDevice::aio_submit()中关于thread_local的注释，非常重要！！！
     assert(shared_driver_datas.empty());
 
     // index 0 is occurred by master thread

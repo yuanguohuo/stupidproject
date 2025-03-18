@@ -1,6 +1,7 @@
 #ifndef STUPID__BLK_SPDK_DRIVER_HPP
 #define STUPID__BLK_SPDK_DRIVER_HPP
 
+#include <iostream>
 #include <vector>
 #include <atomic>
 
@@ -30,6 +31,7 @@ class SharedDriverData {
   {
     block_size = spdk_nvme_ns_get_extended_sector_size(ns);
     size = spdk_nvme_ns_get_size(ns);
+    std::cout << "nvme: " << trid.traddr << " size=" << size << " block_size=" << block_size << std::endl;
     if (trid.trtype == SPDK_NVME_TRANSPORT_PCIE) {
       return;
     }

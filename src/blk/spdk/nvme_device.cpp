@@ -128,6 +128,19 @@ void NVMEDevice::aio_submit(IOContext *ioc)
     //     函数内static变量 |   块作用域  |  程序生命周期  |  所有线程共享
     //     thread_local变量 |   块作用域  |  线程生命周期  |  每个线程独立
 
+    //Yuanguo: 注意！！！！
+    //  一个线程创建了2个NVMEDevice对象：d1, d2。它调用d1->aio_submit(), d2->aio_submit()
+    //  这里还是只会创建1个SharedDriverQueueData对象，在第一次运行到这里的时候!
+    //  这就比较诡异了：
+    //    假如d1和d2的driver不同，分别是/dev/nvme0n1和/dev/nvme1n1，
+    //    那么，这里的行为就不符合预期：数据只会写到1个nvme设备！
+    //  所以NVMEManager::register_ctrlr()函数中assert(shared_driver_datas.empty())，它保证
+    //  d1和d2底层的nvme设备是同一个！
+    //
+    //Yuanguo:
+    //  我注释掉NVMEManager::register_ctrlr()中的assert，使用2个nvme设备验证上面的逻辑，结果
+    //  符合上面的分析！
+
     thread_local SharedDriverQueueData queue_t = SharedDriverQueueData(this, driver);
 
     //Yuanguo:
