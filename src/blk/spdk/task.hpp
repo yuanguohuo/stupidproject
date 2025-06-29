@@ -15,6 +15,13 @@ struct Task {
   uint64_t offset;
   uint64_t len;
 
+  //Yuanguo:
+  //  写操作：
+  //    buf中的数据被拷贝到io_request，见SharedDriverQueueData::alloc_buf_from_pool()
+  //    进而提交给spdk，见SharedDriverQueueData::_aio_handle()
+  //        spdk_nvme_ns_cmd_writev()/spdk_nvme_ns_cmd_readv()
+  //    通过data_buf_reset_sgl()/data_buf_next_sge()从io_request获取数据；
+  //  读操作：貌似没有用；
   //bufferlist bl;
   char* buf;
 

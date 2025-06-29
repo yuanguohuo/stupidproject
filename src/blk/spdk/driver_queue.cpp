@@ -28,6 +28,8 @@ void io_complete(void *t, const struct spdk_nvme_cpl *completion)
         task->device->aio_callback(task->device->aio_callback_priv, ctx->priv);
       }
     } else {
+      //Yuanguo: try_aio_wake()也会递减num_running;
+      //  SharedDriverQueueData::_aio_handle()循环到num_running==0
       ctx->try_aio_wake();
     }
     task->release_segs(queue);
@@ -44,6 +46,8 @@ void io_complete(void *t, const struct spdk_nvme_cpl *completion)
           task->device->aio_callback(task->device->aio_callback_priv, ctx->priv);
         }
       } else {
+        //Yuanguo: try_aio_wake()也会递减num_running;
+        //  SharedDriverQueueData::_aio_handle()循环到num_running==0
         ctx->try_aio_wake();
       }
       delete task;
@@ -135,6 +139,7 @@ static int data_buf_next_sge(void *cb_arg, void **address, uint32_t *length)
   return 0;
 }
 
+//Yuanguo: 从data_buf_list分配内存给t->io_request;
 int SharedDriverQueueData::alloc_buf_from_pool(Task *t, bool write)
 {
   uint64_t count = t->len / data_buffer_size;
@@ -194,6 +199,8 @@ void SharedDriverQueueData::_aio_handle(Task *t, IOContext *ioc)
   while (ioc->num_running) {
 again:
     std::cout << __func__ << " polling" << std::endl;
+    //Yuanguo: 第一轮while循环应该 current_queue_depth = 0；
+    //  从第二轮开始，试图poll上一轮提交的请求；
     if (current_queue_depth) {
       r = spdk_nvme_qpair_process_completions(qpair, max_io_completion);
       if (r < 0) {
@@ -206,6 +213,7 @@ again:
     for (; t; t = t->next) {
       if (current_queue_depth == max_queue_depth) {
         // no slots
+        // Yuanguo: 前面一个也没poll到？queue还是满的，回去继续poll；
         goto again;
       }
 
