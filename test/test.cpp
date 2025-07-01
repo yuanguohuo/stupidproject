@@ -195,6 +195,8 @@ int main(int argc, char** argv)
   stupid::common::unblock_all_signals(nullptr);
 
   //blk test
+  //创建/tmp/nvme，内容是
+  //  trtype:pcie traddr:0000:65:00.0
   BlockDevice* bdev = BlockDevice::create("spdk", "", nullptr, nullptr, nullptr, nullptr);
   std::cout << "open /tmp/nvme" << std::endl;
   bdev->open("/tmp/nvme");
